@@ -526,6 +526,13 @@ struct Message {
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
+  string errorName() @property
+  in { assert(type == MessageType.Error); }
+  body {
+    const(char)* cStr = dbus_message_get_error_name(msg);
+    assert(cStr != null);
+    return cStr.fromStringz().idup;
+  }
   string sender() {
     const(char)* cStr = dbus_message_get_sender(msg);
     assert(cStr != null);
