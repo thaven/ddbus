@@ -488,12 +488,20 @@ struct Message {
     return Message(dbus_message_new_method_return(msg));
   }
 
-  MessageType type() {
-    return cast(MessageType)dbus_message_get_type(msg);
+  MessageType type() @property {
+    return cast(MessageType) dbus_message_get_type(msg);
   }
 
-  bool isCall() {
-    return type() == MessageType.Call;
+  bool isCall() @property {
+    return type == MessageType.Call;
+  }
+
+  bool isSignal() @property {
+    return type == MessageType.Signal;
+  }
+
+  bool isError() @property {
+    return type == MessageType.Error;
   }
 
   // Various string members
