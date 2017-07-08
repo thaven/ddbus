@@ -6,6 +6,9 @@
 /// The patch is also published as PR #5408 to Phobos
 module alt.typecons;
 
+import std.traits;
+import std.meta;
+
 /**
 $(D BlackHole!Base) is a subclass of $(D Base) which automatically implements
 all abstract member functions in $(D Base) as do-nothing functions.  Each
@@ -249,7 +252,7 @@ class AutoImplement(Base, alias how, alias what = isAbstractFunction) : Base
     if (!is(how == class))
 {
     private alias autoImplement_helper_ =
-        AutoImplement_Helper!("autoImplement_helper_", "Base", Base, how, what);
+        AutoImplement_Helper!("autoImplement_helper_", "Base", Base, typeof(this), how, what);
     mixin(autoImplement_helper_.code);
 }
 
@@ -260,7 +263,7 @@ class AutoImplement(
     if (is(Interface == interface) && is(BaseClass == class))
 {
     private alias autoImplement_helper_ = AutoImplement_Helper!(
-            "autoImplement_helper_", "Interface", Interface, how, what);
+            "autoImplement_helper_", "Interface", Interface, typeof(this), how, what);
     mixin(autoImplement_helper_.code);
 }
 
@@ -270,7 +273,7 @@ class AutoImplement(
  * members, should be minimized.
  */
 private template AutoImplement_Helper(string myName, string baseName,
-        Base, alias generateMethodBody, alias cherrypickMethod)
+        Base, Self, alias generateMethodBody, alias cherrypickMethod)
 {
 private static:
     //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::://
@@ -315,11 +318,18 @@ private static:
     alias targetOverloadSets = enumerateOverloads!(Base, canonicalPicker);
 
     /*
+     * Super class of this AutoImplement instance
+     */
+    alias Super = BaseTypeTuple!(Self)[0];
+    static assert(is(Super == class));
+    static assert(is(Base == interface) || is(Super == Base));
+
+    /*
      * A tuple of the super class' constructors.  Used for forwarding
      * constructor calls.
      */
-    static if (__traits(hasMember, Base, "__ctor"))
-        alias ctorOverloadSet = OverloadSet!("__ctor", __traits(getOverloads, Base, "__ctor"));
+    static if (__traits(hasMember, Super, "__ctor"))
+        alias ctorOverloadSet = OverloadSet!("__ctor", __traits(getOverloads, Super, "__ctor"));
     else
         alias ctorOverloadSet = OverloadSet!("__ctor"); // empty
 
@@ -519,24 +529,36 @@ private static:
     {
         static class C_9
         {
+            private string foo_;
+
+            this(string s) {
+                foo_ = s;
+            }
+
             protected string boilerplate() @property
             {
                 return "Boilerplate stuff.";
+            }
+
+            public string foo() @property
+            {
+                return foo_;
             }
         }
 
         interface I_10
         {
-            string test_method();
+            string testMethod(size_t);
         }
 
         static string generateTestMethod(C, alias fun)() @property
         {
-            return "return this.boilerplate;";
+            return "return this.boilerplate[0 .. a0];";
         }
 
-        auto o = new AutoImplement!(I_10, C_9, generateTestMethod);
-  assert (o.test_method() == "Boilerplate stuff.");
+        auto o = new AutoImplement!(I_10, C_9, generateTestMethod)("Testing");
+        assert(o.testMethod(11) == "Boilerplate");
+        assert(o.foo == "Testing");
     }
     /+ // deep inheritance
     {
@@ -971,4 +993,3 @@ template generateAssertTrap(C, func...)
         `throw new NotImplementedError("` ~ C.stringof ~ "."
                 ~ __traits(identifier, func) ~ `");`;
 }
-
