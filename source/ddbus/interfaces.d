@@ -4,27 +4,27 @@ import ddbus.proxy : namespace, signal;
 import ddbus.thin : Variant, DBusAny, ObjectPath;
 
 @namespace("org.freedesktop") {
-  enum RequestNameFlags {
+  enum RequestNameFlags : uint {
     none = 0,
     allowReplacement = 1,
     replaceExisting = 2,
     doNotQueue = 4
   }
 
-  enum RequestNameReply {
+  enum RequestNameReply : uint {
     primaryOwner = 1,
     inQueue = 2,
     exists = 3,
     alreadyOwned = 4
   }
 
-  enum ReleaseNameReply {
+  enum ReleaseNameReply : uint {
     released = 1,
     nonExistant = 2,
     notOwner = 3
   }
 
-  enum StartServiceByNameReply {
+  enum StartServiceByNameReply : uint {
     success = 1,
     alreadyRunning = 2
   }
