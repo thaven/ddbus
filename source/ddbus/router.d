@@ -182,7 +182,7 @@ extern(C) private DBusHandlerResult filterFunc(DBusConnection *dConn, DBusMessag
   }
 }
 
-extern(C) private void unrootUserData(void *userdata) {
+extern(C) private void unrootUserData(void *userdata) nothrow {
   GC.removeRoot(userdata);
 }
 

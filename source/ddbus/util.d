@@ -241,3 +241,10 @@ unittest {
   sig3.assertEqual("iss"); 
 }
 
+auto ref unconst(T)(ref const T* p) {
+  static if (is(T == shared))
+    return cast(shared Unqual!T *) p;
+  else
+    return cast(Unqual!T *) p;
+}
+

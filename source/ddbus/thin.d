@@ -445,16 +445,16 @@ struct Message {
     msg = dbus_message_new_method_call(dest.toStringz(), path.toStringz(), iface.toStringz(), method.toStringz());
   }
 
-  this(DBusMessage *m) {
+  this(DBusMessage *m) nothrow {
     msg = m;
   }
 
-  this(this) {
-    dbus_message_ref(msg);
+  this(this) nothrow @trusted {
+    assumeWontThrow(dbus_message_ref(msg));
   }
 
-  ~this() {
-    dbus_message_unref(msg);
+  ~this() nothrow @trusted {
+     assumeWontThrow(dbus_message_unref(msg));
   }
 
   void build(TS...)(TS args) if(allCanDBus!TS) {
@@ -488,53 +488,53 @@ struct Message {
     return Message(dbus_message_new_method_return(msg));
   }
 
-  MessageType type() @property {
-    return cast(MessageType) dbus_message_get_type(msg);
+  MessageType type() @property const nothrow {
+    return cast(MessageType) assumeWontThrow(dbus_message_get_type(unconst(msg)));
   }
 
-  bool isCall() @property {
-    return type == MessageType.Call;
+  bool isCall() @property const nothrow {
+    return type() == MessageType.Call;
   }
 
-  bool isSignal() @property {
+  bool isSignal() @property const nothrow {
     return type == MessageType.Signal;
   }
 
-  bool isError() @property {
+  bool isError() @property const nothrow {
     return type == MessageType.Error;
   }
 
   // Various string members
   // TODO: make a mixin to avoid this copy-paste
-  string signature() {
-    const(char)* cStr = dbus_message_get_signature(msg);
+  string signature() @property const nothrow {
+    const(char)* cStr = assumeWontThrow(dbus_message_get_signature(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
-  string path() {
-    const(char)* cStr = dbus_message_get_path(msg);
+  string path() @property const nothrow {
+    const(char)* cStr = assumeWontThrow(dbus_message_get_path(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
-  string iface() {
-    const(char)* cStr = dbus_message_get_interface(msg);
+  string iface() @property const nothrow {
+    const(char)* cStr = assumeWontThrow(dbus_message_get_interface(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
-  string member() {
-    const(char)* cStr = dbus_message_get_member(msg);
+  string member() @property const nothrow {
+    const(char)* cStr = assumeWontThrow(dbus_message_get_member(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
-  string errorName() @property
+  string errorName() @property const nothrow
   in { assert(type == MessageType.Error); }
   body {
-    const(char)* cStr = dbus_message_get_error_name(msg);
+    const(char)* cStr = assumeWontThrow(dbus_message_get_error_name(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
-  string sender() {
-    const(char)* cStr = dbus_message_get_sender(msg);
+  string sender() @property const nothrow {
+    const(char)* cStr = assumeWontThrow(dbus_message_get_sender(unconst(msg)));
     assert(cStr != null);
     return cStr.fromStringz().idup;
   }
@@ -548,16 +548,16 @@ unittest {
 
 struct Connection {
   DBusConnection *conn;
-  this(DBusConnection *connection) {
+  this(DBusConnection *connection) nothrow {
     conn = connection;
   }
 
-  this(this) {
-    dbus_connection_ref(conn);
+  this(this) nothrow {
+    assumeWontThrow(dbus_connection_ref(conn));
   }
 
-  ~this() {
-    dbus_connection_unref(conn);
+  ~this() nothrow {
+    assumeWontThrow(dbus_connection_unref(conn));
   }
 
   void close() {
