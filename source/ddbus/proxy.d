@@ -69,7 +69,7 @@ template dbusNameOf(alias I)
   static assert(getUDAs!(I, NamespaceAttribute).length == 1,
     "Only one @namespace attribute allowed.");
 
-  enum dbusNameOf = getUDAs!(I, NamespaceAttribute)[0].name;
+  enum dbusNameOf = getUDAs!(I, NamespaceAttribute)[0].name ~ '.' ~ I.stringof;
 }
 
 class RemoteException : Exception {
@@ -112,7 +112,8 @@ abstract class Proxy
   protected:
   abstract const(char)* iface() const nothrow @property @safe;
 
-  Ret _call(Ret, Args...)(string meth, Args args) if(allCanDBus!Args && canDBus!Ret) {
+  Ret _call(Ret, Args...)(string meth, Args args)
+    if (allCanDBus!Args && (is(Ret == void) || canDBus!Ret)) {
     import ddbus.c_lib : dbus_message_new_method_call;
 
     Message msg = Message(
@@ -138,8 +139,9 @@ abstract class Proxy
     in { assert (msg.isSignal); }
     body {
       try {
-        auto args = msg.readTuple!(Parameters!DG);
-        handler(args);
+        import std.typecons : Tuple;
+        auto args = msg.readTuple!(Tuple!(Parameters!DG));
+        handler(args.expand);
       } catch (Exception) {
         // FIXME:
         // Oops... what to do with the exception?
@@ -214,7 +216,7 @@ class StaticProxy(I) : AutoImplement!(I, Proxy, generateDBusProxy)
 
   protected:
   override const(char)* iface() const nothrow @property @safe {
-    return dbusNameOf!I.ptr; // always a literal, thus \0 terminated
+    return &dbusNameOf!I[0]; // always a literal, thus \0 terminated
   }
 }
 
@@ -277,11 +279,17 @@ template countInParameters(alias fun, size_t i = 0) {
   }
 }
 
+string ucfirst(string s) {
+  import std.exception : assumeUnique;
+  return assumeUnique([ cast(char) toUpper(s[0]) ]) ~ s[1 .. $];
+}
+
 public {
 string generateMethodProxy(I, alias fun)() @property {
   import std.traits;
 
-  enum string meth = __traits(identifier, fun);
+  // Identifier of method, with first letter uppercased
+  enum string meth = ucfirst(__traits(identifier, fun));
 
   alias ParameterIdentifierTuple!fun argNames;
   alias ParameterStorageClassTuple!fun argStors;
