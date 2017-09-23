@@ -1,6 +1,6 @@
 module ddbus.proxy;
 
-import ddbus.thin : Connection, Message, DBusAny;
+import ddbus.thin : Connection, ObjectPath, Message, DBusAny;
 import ddbus.util : canDBus, allCanDBus;
 
 import alt.typecons;
@@ -115,11 +115,11 @@ class RemoteException : Exception
 
 abstract class Proxy
 {
-  this(Connection conn, string dest, string path)
+  this(Connection conn, string dest, ObjectPath path)
   {
     this._conn = conn;
     this._dest = dest.toStringz();
-    this._path = path.toStringz();
+    this._path = path.toString().toStringz();
   }
 
   protected:
@@ -177,11 +177,11 @@ class DynamicProxy : Proxy
 {
   this(
     Connection conn,
-    string dest,
-    string path,
+    string service,
+    ObjectPath path,
     string iface)
   {
-    super(conn, dest, path);
+    super(conn, service, path);
 
     _iface = iface.toStringz();
   }
@@ -207,13 +207,7 @@ class DynamicProxy : Proxy
   const(char)* _iface;
 }
 
-I createProxy(I)(Connection conn, string dest, string path)
-  if (isDBusInterface!I)
-{
-  return new StaticProxy!I(conn, dest, path);
-}
 
-private: // --------------------------------------------------------------------
 
 /+
 abstract class StaticProxyBase : Proxy
@@ -230,15 +224,24 @@ abstract class StaticProxyBase : Proxy
 
 alias StaticProxy(I) = AutoImplement!(I, StaticProxyBase, generateDBusProxy);
 +/
+I createProxy(I)(
+  Connection conn,
+  string service,
+  ObjectPath path) if (isDBusInterface!I)
+{
+  return new StaticProxy!I(conn, service, path);
+}
+
+private: // --------------------------------------------------------------------
 
 class StaticProxy(I) : AutoImplement!(I, Proxy, generateDBusProxy)
 {
   this(
     Connection conn,
-    string dest,
-    string path)
+    string service,
+    ObjectPath path)
   {
-    super(conn, dest, path);
+    super(conn, service, path);
   }
 
   protected:
@@ -414,7 +417,7 @@ unittest
   import ddbus.bus : BusService, BusPath;
   import ddbus.thin : connectToBus;
 
-  DBus bus = createProxy!DBus(connectToBus(), BusService, BusPath);
+  DBus bus = createProxy!DBus(connectToBus(), BusService, ObjectPath(BusPath));
   auto reply = bus.requestName("ca.thume.ddbus.testing",
     RequestNameFlags.doNotQueue | RequestNameFlags.allowReplacement);
   assert (reply == RequestNameReply.alreadyOwned
