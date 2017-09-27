@@ -1,11 +1,13 @@
 module ddbus.proxy;
 
+import spec = ddbus.introspection;
 import ddbus.thin : Connection, ObjectPath, Message, DBusAny;
 import ddbus.util : canDBus, allCanDBus;
 
 import alt.typecons;
 
 import std.conv;
+import std.exception : enforce;
 import std.string;
 import std.traits;
 
@@ -200,35 +202,123 @@ class DynamicProxy : Proxy
     ObjectPath path,
     string iface)
   {
+    import std.algorithm.iteration : filter;
+
     super(conn, service, path);
 
-    _iface = iface.toStringz();
+    auto ifaceSpecs = spec.introspect(conn, service, path)
+      .interfaces
+      .filter!(a => (a.name == iface));
+
+    enforce(!ifaceSpecs.empty,
+      "Object " ~ path.toString() ~ " does not support interface " ~ iface);
+
+    _ifaceSpec = ifaceSpecs.front;
   }
 
-  // TODO: use known method signature
-  DBusAny opDispatch(string meth, Args...)(Args args)
-  {
-    auto ret = _call!Message(meth, args).readTuple!DBusAny();
+  /++
+    Call a remote method semi-statically
 
-    if (ret.tuple.length == 1)
-      return ret.tuple[0];
-    else
-      return ret;
+    This allows to use dot notation to make a call through a dynamic proxy.
+    This is here because it may turn out to be handy sometimes, but generally
+    a StaticProxy should be used in case the interface is known at compile time.
+   +/
+  Message opDispatch(string methodName, Args...)(Args args)
+  {
+    enforce(
+      typeSigAll!Args == _ifaceSpec.getMethodByName(methodName).inputSignature,
+      "Argument types don't match the signature obtained through introspection");
+
+    return _call!Message(methodName, args);
+  }
+
+  /++
+    Call a remote method dynamically
+
+    Params:
+      methodName = The name of the method to call.
+      args = Either an array or an associative array holding any arguments to be
+          passed to the remote method. If specified as an array, arguments are
+          interpreted positionally, and their order must match the method
+          specification exactly. If specified as an associative array, the
+          keys match the argument names according to the method specification.
+          Method arguments need to be wrapped in DBusAny because their types are
+          unknown at compile time. Types of arguments are checked against the
+          method specification obtained through introspection.
+
+    Returns:
+      A `Message` containing the value(s) returned by the remote method.
+
+    Throws:
+      `DBusException` if an error occurs while sending or receiving messages.
+      `RemoteException` if the remote method returns an error.
+   +/
+  Message call(
+    string methodName,
+    DBusAny[] args)
+  {
+    auto methodSpec = &_ifaceSpec.getMethodByName(methodName);
+
+    return _dynCall(methodSpec, (scope Message msg) {
+      foreach (i, ref argument; methodSpec.arguments) {
+        if (i >= args.length)
+          break;
+
+        if (argument.direction == spec.Argument.Direction.in_) {
+          msg.build(args[i]);
+        }
+      }
+    });
+  }
+
+  /// ditto
+  Message call(
+    string methodName,
+    DBusAny[string] args)
+  {
+    auto methodSpec = &_ifaceSpec.getMethodByName(methodName);
+
+    return _dynCall(methodSpec, (scope Message msg) {
+      foreach (ref argument; methodSpec.arguments) {
+        if (argument.direction == spec.Argument.Direction.in_) {
+          msg.build(args[argument.name]);
+        }
+      }
+    });
   }
 
   protected:
   override const(char)* iface() const nothrow @property @safe
   {
-    return _iface;
+    return _ifaceSpec.name.toStringz();
   }
 
   private:
-  const(char)* _iface;
+  immutable spec.Interface _ifaceSpec;
+
+  Message _dynCall(
+    const spec.Method * methodSpec,
+    void delegate(scope Message) argBuilder)
+  {
+    import ddbus.c_lib : dbus_message_new_method_call;
+
+    Message msg = Message(dbus_message_new_method_call(
+        _dest, _path, iface, methodSpec.name.toStringz()));
+
+    argBuilder(msg);
+
+    enforce(
+      msg.signature == methodSpec.inputSignature,
+      "Argument types don't match the signature obtained through introspection");
+
+    Message ret = this._conn.sendWithReplyBlocking(msg);
+
+    if (ret.isError)
+      throw new RemoteException(this, methodSpec.name, ret);
+
+    return ret;
+  }
 }
-
-
-
-
 
 I createProxy(I)(
   Connection conn,
