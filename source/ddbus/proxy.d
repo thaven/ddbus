@@ -173,8 +173,27 @@ abstract class Proxy
   void delegate(Message) nothrow[string] _signalHandlers;
 }
 
+/++
+  Dynamic proxy
+
+  To be used in case the interface of a remote object is not known at compile
+  time.
+
+  `DynamicProxy` utilizes introspection to obtain information about a remote
+  object and uses that to proxy any calls, while checking argument types at
+  runtime.
+ +/
 class DynamicProxy : Proxy
 {
+  /++
+    Constructor
+
+    Params:
+      conn = The DBus connection to be used
+      service = The name of the service that publishes the remote object
+      path = Path to the object to be proxied
+      iface = The name of the interface to be used
+   +/
   this(
     Connection conn,
     string service,
@@ -209,21 +228,8 @@ class DynamicProxy : Proxy
 
 
 
-/+
-abstract class StaticProxyBase : Proxy
-{
-  this(Connection conn, string dest, string path) {
-    super(conn, dest, path);
-  }
 
-  protected:
-  override const(char)* iface() const nothrow @property @safe {
-    return dbusNameOf!I.ptr; // always a literal, thus \0 terminated
-  }
-}
 
-alias StaticProxy(I) = AutoImplement!(I, StaticProxyBase, generateDBusProxy);
-+/
 I createProxy(I)(
   Connection conn,
   string service,
