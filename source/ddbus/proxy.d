@@ -115,66 +115,6 @@ class RemoteException : Exception
   Message _msg;
 }
 
-abstract class Proxy
-{
-  this(Connection conn, string dest, ObjectPath path)
-  {
-    this._conn = conn;
-    this._dest = dest.toStringz();
-    this._path = path.toString().toStringz();
-  }
-
-  protected:
-  abstract const(char)* iface() const nothrow @property @safe;
-
-  Ret _call(Ret, Args...)(string meth, Args args)
-    if (allCanDBus!Args && (is(Ret == void) || canDBus!Ret))
-  {
-    import ddbus.c_lib : dbus_message_new_method_call;
-
-    Message msg = Message(
-      dbus_message_new_method_call(_dest, _path, iface, meth.toStringz()));
-    msg.build(args);
-    Message ret = this._conn.sendWithReplyBlocking(msg);
-
-    if (ret.isError)
-      throw new RemoteException(this, meth, ret);
-
-    static if (!is(Ret == void)) {
-      static if (is(Ret == Message))
-        return ret;
-      else
-        return ret.read!Ret();
-    }
-  }
-
-  void _bind(DG)(string sig, DG handler)
-    if(is(DG == delegate) && allCanDBus!(Parameters!DG))
-  {
-    void handlerWrapper(Message msg) nothrow
-    in { assert (msg.isSignal); }
-    body {
-      try {
-        import std.typecons : Tuple;
-        auto args = msg.readTuple!(Tuple!(Parameters!DG));
-        handler(args.expand);
-      } catch (Exception) {
-        // FIXME:
-        // Oops... what to do with the exception?
-        // Should have some exception handling callback.
-      }
-    }
-
-    _signalHandlers[sig] = &handlerWrapper;
-  }
-
-  private:
-  Connection _conn;
-  const(char)* _dest;
-  const(char)* _path;
-  void delegate(Message) nothrow[string] _signalHandlers;
-}
-
 /++
   Dynamic proxy
 
@@ -330,6 +270,66 @@ I createProxy(I)(
 
 private: // --------------------------------------------------------------------
 
+abstract class Proxy
+{
+  this(Connection conn, string dest, ObjectPath path)
+  {
+    this._conn = conn;
+    this._dest = dest.toStringz();
+    this._path = path.toString().toStringz();
+  }
+
+  protected:
+  abstract const(char)* iface() const nothrow @property @safe;
+
+  Ret _call(Ret, Args...)(string meth, Args args)
+    if (allCanDBus!Args && (is(Ret == void) || canDBus!Ret))
+  {
+    import ddbus.c_lib : dbus_message_new_method_call;
+
+    Message msg = Message(
+      dbus_message_new_method_call(_dest, _path, iface, meth.toStringz()));
+    msg.build(args);
+    Message ret = this._conn.sendWithReplyBlocking(msg);
+
+    if (ret.isError)
+      throw new RemoteException(this, meth, ret);
+
+    static if (!is(Ret == void)) {
+      static if (is(Ret == Message))
+        return ret;
+      else
+        return ret.read!Ret();
+    }
+  }
+
+  void _bind(DG)(string sig, DG handler)
+    if(is(DG == delegate) && allCanDBus!(Parameters!DG))
+  {
+    void handlerWrapper(Message msg) nothrow
+    in { assert (msg.isSignal); }
+    body {
+      try {
+        import std.typecons : Tuple;
+        auto args = msg.readTuple!(Tuple!(Parameters!DG));
+        handler(args.expand);
+      } catch (Exception) {
+        // FIXME:
+        // Oops... what to do with the exception?
+        // Should have some exception handling callback.
+      }
+    }
+
+    _signalHandlers[sig] = &handlerWrapper;
+  }
+
+  private:
+  Connection _conn;
+  const(char)* _dest;
+  const(char)* _path;
+  void delegate(Message) nothrow[string] _signalHandlers;
+}
+
 class StaticProxy(I) : AutoImplement!(I, Proxy, generateDBusProxy)
 {
   this(
@@ -421,7 +421,6 @@ public {
 
   string generateMethodProxy(I, alias fun)() @property
   {
-
     import std.traits;
 
     // Identifier of method, with first letter uppercased
@@ -463,7 +462,6 @@ public {
 
   string generateSignalProxy(I, alias fun)() @property
   {
-
     import std.traits;
 
     alias ParameterStorageClassTuple!fun funArgStors;
