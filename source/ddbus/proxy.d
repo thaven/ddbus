@@ -428,35 +428,13 @@ public {
     enum string meth = ucfirst(__traits(identifier, fun));
 
     alias ParameterIdentifierTuple!fun argNames;
-    alias ParameterStorageClassTuple!fun argStors;
-    alias ParameterStorageClass STC;
-
-    static assert(argNames.length == argStors.length);
-
-    string inArgsList;
-    size_t outArgsCount;
-    foreach (i, argStor; argStors) {
-      static if (!(argStor & STC.out_)) {
-        inArgsList ~= ", a" ~ i.to!string;
-
-        enum bool isNonConstRef =
-          (argStor & STC.ref_) && !is(Parameters!fun[i] == const);
-
-        static assert(!outArgsCount || isNonConstRef,
-          "DBus method must list output parameters after input parameters.");
-
-        static if (!isNonConstRef)
-          continue;
-      }
-
-      ++outArgsCount;
-    }
 
     alias ReturnType!fun R;
     enum haveReturn = !is(R == void);
-    enum string argList = "(\"" ~ meth ~ "\", args[0 .. " ~ countInParameters!fun.to!string  ~ "])";
+    enum string argList = "(\"" ~ meth ~ "\", args[0 .. "
+      ~ countInParameters!fun.to!string  ~ "])";
 
-    if (!outArgsCount)
+    if (!countOutParameters!fun)
       static if (haveReturn)
         return "return this._call!(typeof(return))" ~ argList ~ ';';
       else
